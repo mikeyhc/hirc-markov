@@ -11,8 +11,9 @@ module Markov
 import           Control.Applicative ((<$>))
 import           Control.Arrow (first, second)
 import           Control.Exception (catch, SomeException)
+import           Data.List (find)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (mapMaybe, fromMaybe, maybe)
+import           Data.Maybe (mapMaybe, fromMaybe, maybe, isNothing)
 import qualified Data.Random as R
 import qualified Data.Random.Distribution.Categorical as Cat
 import qualified Data.Text as T
@@ -88,15 +89,16 @@ parseLogFile h = do
                     nlh = T.head nl
                 if nlh == '-' || nlh == '*' then parseLogFile h
                 else do
-                    let r = T.drop 2 $ T.dropWhile (/= '>') nl
-                        l = cleanWords $ T.words r ++ ["."]
+                    let l = T.words . T.drop 2 $ T.dropWhile (/= '>') nl
                     case l of
                         [] -> parseLogFile h
-                        _  -> (l:) <$> parseLogFile h
+                        _  -> if checkValidWords l 
+                                  then (l:) <$> parseLogFile h
+                                  else parseLogFile h
 
 clean :: T.Text -> T.Text
 clean = T.filter (`notElem` "\"';\\")
 
-cleanWords :: [T.Text] -> [T.Text]
-cleanWords = filter (\x -> not $ "http://" `T.isPrefixOf` x
-                        && T.head x /= '!') 
+checkValidWords :: [Word] -> Bool
+checkValidWords wl = T.head (head wl) /= '!'
+                  && isNothing (find ("http://" `T.isPrefixOf`) wl)
