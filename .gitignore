@@ -2,3 +2,4 @@
 *.sandbox.config
 irclogs
 dist
+*.swp

@@ -1,0 +1,5 @@
+TODO
+====
+* Make it read from the directory on lauch
+* Change `!nom file` to `!nom` which reloads the directory
+* make parseIRCLog function and parsePlainText function
