@@ -87,7 +87,8 @@ parseLogFile h = do
             else do
                 let nl  = clean . T.drop 2 $ T.dropWhile (`notElem` "-*<") l
                     nlh = T.head nl
-                if nlh == '-' || nlh == '*' then parseLogFile h
+                if nlh == '-' || nlh == '*' || T.length nl < 3 
+                then parseLogFile h
                 else do
                     let l = T.words . T.drop 2 $ T.dropWhile (/= '>') nl
                     case l of
