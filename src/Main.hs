@@ -57,7 +57,7 @@ markov = do
                             Just x -> sendReply $ T.unpack x
                             _      -> sendReply "No data to quote from")
 
-vomit = modify (second (const M.empty))
+vomit = modify (second (const M.empty)) >> sendReply "database cleared"
 
 help :: MarkovMonad ()
 help = sendReply "!nom logfile: read the log file"
@@ -69,12 +69,17 @@ nomAll :: MarkovMonad ()
 nomAll = do
     fileList <- get 
         >>= \x -> liftIO (getDirectoryContents (fst x) `catch` errorCatch) 
-    mapM_ nomLog fileList
+    mapM_ nomLog $ filter filtHidden fileList
   where
     errorCatch :: SomeException -> IO [String]
     errorCatch e = do
         putStrLn $ "Exception: " ++ show e 
         return []
+
+    filtHidden :: String -> Bool
+    filtHidden []      = False
+    filtHidden ('.':_) = False
+    filtHidden _       = True
 
 nomLog :: String -> MarkovMonad ()
 nomLog logname = do
