@@ -27,9 +27,15 @@ type MarkovDatabase  = M.Map Word (Int, CountMap)
 
 generate' :: MarkovDatabase -> R.RVar T.Text
 generate' db = do
-    l <- go (drawFrom . mapMaybe onlyStarts $ M.toList db) db 
+    l <- doDraw
     return $ T.intercalate " " l
   where
+    doDraw :: R.RVar [T.Text]
+    doDraw = do
+        l <- go (drawFrom . mapMaybe onlyStarts $ M.toList db) db 
+        if length l < 3 then doDraw
+                        else return l 
+
     onlyStarts (k, (c, _)) = if c > 0 then Just (fromIntegral c, k) 
                                       else Nothing
     go :: R.RVar Word -> MarkovDatabase -> R.RVar [Word]
@@ -51,7 +57,7 @@ generate db = (Just <$> R.runRVar (generate' db) R.StdRandom)
               `catch` exceptionHandler
   where
     exceptionHandler :: SomeException -> IO (Maybe T.Text)
-    exceptionHandler e = putStrLn (show e) >> return Nothing
+    exceptionHandler e = print e >> return Nothing
 
 drawFrom :: [(Double, Word)] -> R.RVar Word
 drawFrom = R.rvar . Cat.fromList 
