@@ -48,7 +48,7 @@ markov :: MarkovMonad ()
 markov = do
     msg <- getMsg
     if msg == "!help"                then help
-    else if "!nom " `isPrefixOf` msg then ifauth (nomLog (drop 5 msg))
+    else if "!nom " `isPrefixOf` msg then ifauth (nom (drop 5 msg))
     else if msg == "!vomit"          then ifauth vomit
     else if msg == "!nom-all"        then ifauth nomAll
     else when (msg == "!quote")     
@@ -56,6 +56,11 @@ markov = do
                       >>= \mx -> case mx of 
                             Just x -> sendReply $ T.unpack x
                             _      -> sendReply "No data to quote from")
+
+nom :: String -> MarkovMonad ()
+nom file = nomLog file >>= \x -> case x of
+    Left msg -> sendReply msg
+    _        -> sendReply $ file ++ " added"
 
 vomit = modify (second (const M.empty)) >> sendReply "database cleared"
 
@@ -69,7 +74,8 @@ nomAll :: MarkovMonad ()
 nomAll = do
     fileList <- get 
         >>= \x -> liftIO (getDirectoryContents (fst x) `catch` errorCatch) 
-    mapM_ nomLog $ filter filtHidden fileList
+    mapM_ (nomLog >=> printLeft) $ filter filtHidden fileList
+    sendReply "done nomming"
   where
     errorCatch :: SomeException -> IO [String]
     errorCatch e = do
@@ -81,17 +87,20 @@ nomAll = do
     filtHidden ('.':_) = False
     filtHidden _       = True
 
-nomLog :: String -> MarkovMonad ()
+    printLeft :: Either String a -> MarkovMonad ()
+    printLeft (Left msg) = sendReply msg
+    printLeft _          = return ()
+
+nomLog :: String -> MarkovMonad (Either String MarkovDatabase)
 nomLog logname = do
     (p, db) <- get
     edb <- liftIO ((fmap Right 
            $! (updateDBFromLog $ p ++ "/" ++ takeLast logname) db)
            `catch` updateException logname)
     case edb of 
-        Left msg -> sendReply msg
-        Right d  -> do
-            sendReply $ logname ++ " added"
-            put (p, d)
+        Left msg -> return edb
+        Right d  -> put (p, d) >> return edb
+
 
 updateException :: String -> SomeException 
                 -> IO (Either String MarkovDatabase)
