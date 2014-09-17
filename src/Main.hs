@@ -11,10 +11,10 @@ import           Control.Monad.Trans
 import           Data.List
 import qualified Data.Map as M
 import qualified Data.Text as T
-import Debug.Trace
 import           HarkerIRC.Client
 import           HarkerIRC.Types
 import           Markov
+import           System.Directory
 import           System.Environment
 
 newtype MarkovMonadT m a = MarkovMonad (StateT (FilePath, MarkovDatabase)
@@ -24,7 +24,7 @@ type MarkovMonad a = MarkovMonadT IO a
 
 instance (Monad m) => MonadState (FilePath, MarkovDatabase) 
                                  (MarkovMonadT m) where
-    get   = MarkovMonad $ get
+    get   = MarkovMonad   get
     put   = MarkovMonad . put
     state = MarkovMonad . state
 
@@ -49,21 +49,36 @@ markov = do
     msg <- getMsg
     if msg == "!help"                then help
     else if "!nom " `isPrefixOf` msg then ifauth (nomLog (drop 5 msg))
-    else if msg == "!quote"          
-        then gets snd >>= liftIO . generate
+    else if msg == "!vomit"          then ifauth vomit
+    else if msg == "!nom-all"        then ifauth nomAll
+    else when (msg == "!quote")     
+              (gets snd >>= liftIO . generate
                       >>= \mx -> case mx of 
                             Just x -> sendReply $ T.unpack x
-                            _      -> sendReply "No data to quote from"
-    else return ()
+                            _      -> sendReply "No data to quote from")
+
+vomit = modify (second (const M.empty))
 
 help :: MarkovMonad ()
-help = sendReply "!nom:   add a log"
-    >> sendReply "!quote: generate a random quote"
+help = sendReply "!nom logfile: read the log file"
+    >> sendReply "!vomit:       empty database"
+    >> sendReply "!nom-all:     read the whole directory"
+    >> sendReply "!quote:       generate a random quote"
+
+nomAll :: MarkovMonad ()
+nomAll = do
+    fileList <- get 
+        >>= \x -> liftIO (getDirectoryContents (fst x) `catch` errorCatch) 
+    mapM_ nomLog fileList
+  where
+    errorCatch :: SomeException -> IO [String]
+    errorCatch e = do
+        putStrLn $ "Exception: " ++ show e 
+        return []
 
 nomLog :: String -> MarkovMonad ()
 nomLog logname = do
     (p, db) <- get
-    trace ("reading: " ++ p ++ "/" ++ takeLast logname) $ return ()
     edb <- liftIO ((fmap Right 
            $! (updateDBFromLog $ p ++ "/" ++ takeLast logname) db)
            `catch` updateException logname)
@@ -75,7 +90,6 @@ nomLog logname = do
 
 updateException :: String -> SomeException 
                 -> IO (Either String MarkovDatabase)
-updateException file e = putStrLn (show e)
-                      >> return  (Left $ "Error reading " ++ file)
+updateException file e = print e >> return  (Left $ "Error reading " ++ file)
 
 takeLast = reverse . takeWhile (\x -> x /= '/' && x /= '\\') . reverse
